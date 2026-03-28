@@ -1,0 +1,42 @@
+name: dbt CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  dbt-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dbt
+        run: pip install dbt-snowflake
+
+      - name: Setup profiles.yml
+        run: |
+          mkdir -p ~/.dbt
+          echo "${{ secrets.DBT_PROFILES }}" > ~/.dbt/profiles.yml
+
+      - name: Install dependencies
+        run: dbt deps
+
+      - name: Debug connection
+        run: dbt debug
+
+      - name: Check freshness
+        run: dbt source freshness
+
+      - name: Run models
+        run: dbt run
+
+      - name: Run tests
+        run: dbt test

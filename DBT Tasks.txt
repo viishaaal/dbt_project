@@ -1,0 +1,332 @@
+
+# 🔥 1. Build a Medallion Architecture (must-do)
+
+**Goal:** Simulate a real data warehouse pipeline
+
+### What you do:
+
+* Raw data → **staging (cleaning)** → **intermediate** → **marts (final models)**
+* Use `ref()` to build dependencies
+* Apply naming conventions
+
+### Skills you build:
+
+* Data modeling
+* Modular SQL
+* Real-world project structure
+
+👉 This is the **#1 thing recruiters expect**
+
+1)  create schema KRISHNA_SOURCE.bronze;
+	create schema KRISHNA_SOURCE.silver;
+	create schema KRISHNA_SOURCE.gold;
+
+create or replace table KRISHNA_SOURCE.bronze.customers_raw (
+    customer_id int,
+    name string,
+    email string,
+    city string,
+    created_at timestamp
+);
+
+create or replace table KRISHNA_SOURCE.bronze.orders_raw (
+    order_id int,
+    customer_id int,
+    amount number(10,2),
+    status string,
+    order_date date
+);
+
+insert into KRISHNA_SOURCE.bronze.customers_raw values
+(1, 'Alice ', 'ALICE@email.com', 'New York', '2024-01-01'),
+(2, 'Bob', 'bob@email.com', 'Chicago', '2024-01-05'),
+(3, null, 'charlie@email.com', 'Boston', '2024-01-10');
+
+insert into KRISHNA_SOURCE.bronze.orders_raw values
+(101, 1, 100.50, 'completed', '2024-02-01'),
+(102, 1, 200.00, 'completed', '2024-02-05'),
+(103, 2, 50.00, 'cancelled', '2024-02-07'),
+(104, 3, 75.00, 'completed', '2024-02-10');
+
+
+2) dbt Source Config (IMPORTANT)
+models/bronze/schema.yml
+
+version: 2
+
+sources:
+  - name: bronze
+    database: KRISHNA_SOURCE
+    schema: bronze
+    tables:
+      - name: customers_raw
+      - name: orders_raw
+	  
+	  
+3) Silver Layer (Cleaning)
+models/silver/stg_customers.sql
+
+{{ config(
+    materialized='incremental',
+    unique_key='customer_id'
+) }}
+
+select
+    customer_id,
+    trim(name) as name,
+    lower(email) as email,
+    city,
+    created_at
+from {{ source('bronze', 'customers_raw') }}
+where name is not null
+
+{% if is_incremental() %}
+  and created_at >= dateadd(day, -2, (select max(created_at) from {{ this }}))
+{% endif %}
+
+
+models/silver/stg_orders.sql
+
+{{ config(
+    materialized='incremental',
+    unique_key='order_id',
+    incremental_strategy='merge'
+) }}
+
+select
+    order_id,
+    customer_id,
+    amount,
+    status,
+    order_date
+from {{ source('bronze', 'orders_raw') }}
+
+{# runs only if incremental, and looks for orders within the last two days of max order date=#}
+
+{% if is_incremental() %}
+  and order_date >= dateadd(day, -2, (select max(order_date) from {{ this }}))
+{% endif %}
+
+4) Gold Layer (Business Models)
+models/gold/fct_orders.sql
+select
+    o.order_id,
+    o.customer_id,
+    c.name,
+    o.amount,
+    o.order_date
+from {{ ref('stg_orders') }} o
+join {{ ref('stg_customers') }} c
+    on o.customer_id = c.customer_id
+	
+models/gold/customer_revenue.sql
+select
+    customer_id,
+    sum(amount) as total_revenue
+from {{ ref('fct_orders') }}
+group by customer_id
+
+5) Tests:: dbt tests return bad data, not good data
+👉 You are not writing tests directly
+👉 You are telling dbt to generate SQL queries automatically
+
+version: 2
+
+models:
+  - name: stg_customers
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - unique
+
+  - name: stg_orders
+    columns:
+      - name: order_id
+        tests:
+          - not_null
+          - unique
+		  
+👉 If this returns ANY rows → test FAILS
+👉 If 0 rows → PASS		
+
+Relationship test (real-world useful)
+
+If you add:
+
+- name: stg_orders
+  columns:
+    - name: customer_id
+      tests:
+        - relationships:
+            to: ref('stg_customers')
+            field: customer_id
+
+dbt runs:
+
+select customer_id
+from stg_orders
+where customer_id not in (
+    select customer_id from stg_customers
+)
+
+👉 Ensures:
+Every order has a valid customer
+
+🧠 Why this is powerful
+
+You’re basically adding:
+
+Data validation
+Data integrity
+Production safety
+
+👉 Without writing full SQL manually
+
+🔥 Real-world usage
+
+Companies use dbt tests to:
+
+Catch bad data early
+Prevent broken dashboards
+Enforce data contracts  
+		  
+6) Run
+dbt run
+dbt test
+
+
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+
+# 📊 2. Create Business Metrics Layer
+Gold Layer is already doing that
+
+1. Total Revenue
+2. Revenue per Customer
+3. Total Orders
+4. Average Order Value (AOV)
+5. Daily Revenue
+6. Repeat Customers
+7. Cancellation Rate
+
+# ⚙️ 3. Add Tests (data quality)
+
+# 🔁 4. Incremental Models (very important)
+
+# 📚 5. Documentation + Lineage 
+
+**Goal:** Make your project explainable
+
+### What you do:
+
+* Add descriptions in YAML
+* Run:
+
+```bash
+dbt docs generate
+dbt docs serve
+```
+
+### Skills:
+
+* Data governance
+* Communication
+
+---
+
+# 🔌 6. Source + Freshness Checks:: dbt source freshness
+
+**Goal:** Monitor upstream data
+
+### What you do:
+
+* Define sources
+* Add freshness checks
+
+### Skills:
+
+* Pipeline reliability
+* Production awareness
+
+
+ 
+
+---
+
+# 🧠 7. Macros (power move)
+
+**Goal:** Write reusable SQL logic
+
+### Example:
+
+```jinja
+{% macro clean_column(col) %}
+    trim(lower({{ col }}))
+{% endmacro %}
+```
+
+### Skills:
+
+* DRY principles
+* Advanced Jinja usage
+
+---
+
+# 🚀 8. End-to-End Project (best confidence booster)
+
+### Build this:
+
+* Source: CSV / API / database
+* Transform with dbt
+* Load into warehouse
+* Visualize in Power BI
+
+### Stack:
+
+* dbt + Snowflake/BigQuery
+* Optional: Airflow
+
+👉 This is what gets you hired
+
+---
+
+# 🧪 9. Debugging & Compilation
+
+**Goal:** Understand how dbt really works
+
+### Practice:
+
+* `dbt compile`
+* Inspect `target/compiled`
+* Debug Jinja issues
+
+👉 This separates beginners from pros
+
+---
+
+# 💡 Best Practice Path (do this in order)
+
+1. Staging + marts
+2. Tests
+3. Incremental models
+4. Docs
+5. Macros
+6. Full project
+
+---
+
+# 🧠 Real Talk
+
+If you can confidently:
+
+* Build layered models
+* Use `ref()` properly
+* Write tests
+* Do incremental loads
+
+👉 You’re already ahead of most “dbt beginners”
+
+---
+
+If you want, I can give you a **complete project idea (with dataset + folder structure)** that you can finish in a weekend and put on your resume.

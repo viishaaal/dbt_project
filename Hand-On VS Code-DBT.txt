@@ -1,0 +1,141 @@
+DBT links::
+		https://docs.getdbt.com/docs/configure-your-profile
+		https://community.getdbt.com/
+
+CMD : Go to direcotyr: control + ~ : will open VS code
+
+dbt init xxxxxxx : start a new project, it will create directory structure and reauired files for the dbt 
+
+dbt run --select testmodel.sql
+
+See sql from jinja: write dbt model, run: dbt compile, then go to target folder and see the ccompiled jinji that is sql 
+
+
+dbt snapshot : run snapshot
+
+SCD2 Steps::
+
+Step 1: Create raw table (Snowflake)
+
+Step 2: Define source (NEW FILE)::  add table name in models/source.yml
+
+Step 3: Create snapshot (NEW FILE):: snapshots/customer_snapshot.sql
+
+			{% snapshot customer_snapshot %}
+
+			{{
+				config(
+					target_schema='snapshots',
+					unique_key='id',
+					strategy='check',
+					check_cols=['name', 'city']
+				)
+			}}
+
+			select
+				id,
+				name,
+				city
+			from {{ source('raw', 'customer') }}
+
+			{% endsnapshot %}
+			
+Step 4: Run snapshot::
+   dbt snapshot
+   
+Step 5: Make a change in source::
+
+Step 6: Run snapshot again
+
+Step 7: Verify result::  select * from KRISHNA_SOURCE.SNAPSHOTS.CUSTOMER_SNAPSHOT;   
+
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+
+Jinja Basics
+::::::::::::
+
+1. Expressions ({{ }}) Used to output something::select {{ 1 + 1 }} as result:: to: select 2 as result
+
+2. ref() → reference another model:: select * from {{ ref('stg_customer') }}
+
+3. source() → reference raw table:: select * from {{ source('raw', 'customer') }}
+
+3. config() → model settings:: {{ config(materialized='table') }}
+
+4. Statements ({% %}) Used for logic (if, loops, etc.)
+
+IF condition::
+{% if is_incremental() %}
+    where updated_at > current_date - 1
+{% endif %}
+
+For loop::
+select
+{% for col in ['id', 'name', 'city'] %}
+    {{ col }}{% if not loop.last %},{% endif %}
+{% endfor %}
+from table
+
+
+
+5. Variables
+🔸 Define in dbt_project.yml
+
+vars:
+  country: 'USA'
+  
+🔸 Use in SQL
+
+select '{{ var("country") }}' as country
+
+
+6.Macros (Reusable functions)
+
+📁 macros/my_macro.sql
+
+{% macro multiply(x, y) %}
+    ({{ x }} * {{ y }})
+{% endmacro %}
+
+Use it:
+
+select {{ multiply(2, 3) }} as result
+
+7. Built-in dbt functions
+
+🔸 is_incremental()
+{% if is_incremental() %}
+    -- only runs during incremental load
+{% endif %}
+
+🔸 this
+select * from {{ this }}
+
+👉 refers to current model
+
+8. Comments
+{# this is a jinja comment #}
+
+Syntax	Use
+{{ }}	output value
+{% %}	logic
+{# #}	comment
+ref()	dbt model
+source()	raw table
+config()	settings
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
