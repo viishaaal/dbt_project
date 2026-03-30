@@ -198,6 +198,11 @@ dbt test
 
 :::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::CICD:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 CICD::
+GRANT USAGE ON ALL SCHEMAS IN DATABASE KRISHNA_SOURCE TO ROLE SYSADMIN;
+GRANT CREATE TABLE, CREATE VIEW ON ALL SCHEMAS IN DATABASE KRISHNA_SOURCE TO ROLE SYSADMIN;
+
+git commit --allow-empty -m "retry"
+--allow-empty = make a commit even if no file changed
 
 cd C:\Users\dbt_project
 git init
