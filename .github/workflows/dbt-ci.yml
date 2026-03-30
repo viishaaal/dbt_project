@@ -9,6 +9,7 @@ on:
 jobs:
   dbt-run:
     runs-on: ubuntu-latest
+    environment: DBT-CICD
 
     defaults:
       run:
