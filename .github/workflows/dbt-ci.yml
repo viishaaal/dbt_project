@@ -12,7 +12,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: ./dbt_project   # 🔴 MUST match your folder name
+        working-directory: .   # 🔴 MUST match your folder name
 
     steps:
       - name: Checkout repo
