@@ -236,6 +236,9 @@ git push -u origin main
 4. Create GUthub Repository Secrets: DBs...
 5. Make chnages and push to github and the Integratoin will run automatically 		
 6. Project name shuols match in prject.yml and dbt-ci.yml
+7. git checkout -b dev
+   git push origin dev
+8.   
 
 
 
