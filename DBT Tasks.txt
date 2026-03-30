@@ -196,8 +196,51 @@ dbt run
 dbt test
 
 
-:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::CICD:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+CICD::
 
+cd C:\Users\dbt_project
+git init
+		Creates a hidden folder called .git inside your project directory
+		Sets up all the internal files Git needs to track changes
+		Starts version control for that folder
+git add . (Put chnages in the staging area, Git only commits what’s in the staging area)
+git commit -m "initial commit"
+git remote add origin <your-github-repo>
+git push -u origin main
+git config --global user.name "Your Name"
+git config --global user.email "your@email.com"
+
+1. Create repo on GitHub: https://github.com/new
+
+2. Link local repo to GitHub
+git remote add origin https://github.com/<your-username>/<repo-name>.git :: It connects your local repo → remote (GitHub).
+git branch -M main
+				git branch -M main = rename your current branch to main
+				-M = force rename
+				Changes branch name (e.g., master → main)
+				Why:GitHub uses main as default. No code change, just the branch name.
+git push -u origin main
+		Sends your code → GitHub
+		To branch → main
+		On repo → origin
+		-u = remember this connection (If you don’t use -u:Code still uploads ✅ But Git won’t remember the branch 👉 So next time you must type: git push origin main
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
 # 📊 2. Create Business Metrics Layer
 Gold Layer is already doing that
@@ -248,9 +291,6 @@ dbt docs serve
 
 * Pipeline reliability
 * Production awareness
-
-
- 
 
 ---
 

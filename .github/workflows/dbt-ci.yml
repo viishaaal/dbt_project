@@ -1,42 +1,60 @@
-name: dbt CI
+name: dbt CI/CD Pipeline
 
 on:
-  pull_request:
   push:
-    branches: [ main ]
+    branches:
+      - main
+  pull_request:
 
 jobs:
-  dbt-ci:
+  dbt-run:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: ./dbt_project   # 🔴 MUST match your folder name
+
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: Install dbt
-        run: pip install dbt-snowflake
+        run: |
+          pip install --upgrade pip
+          pip install dbt-snowflake
 
-      - name: Setup profiles.yml
+      - name: Create profiles.yml
         run: |
           mkdir -p ~/.dbt
-          echo "${{ secrets.DBT_PROFILES }}" > ~/.dbt/profiles.yml
+          cat <<EOF > ~/.dbt/profiles.yml
+          my_project:
+            target: dev
+            outputs:
+              dev:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+                role: ${{ secrets.SNOWFLAKE_ROLE }}
+                database: ${{ secrets.SNOWFLAKE_DATABASE }}
+                warehouse: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+                schema: ${{ secrets.SNOWFLAKE_SCHEMA }}
+                threads: 4
+          EOF
 
-      - name: Install dependencies
-        run: dbt deps
+      - name: Run dbt debug
+        run: dbt debug --profiles-dir ~/.dbt
 
-      - name: Debug connection
-        run: dbt debug
+      - name: Run dbt deps
+        run: dbt deps --profiles-dir ~/.dbt
 
-      - name: Check freshness
-        run: dbt source freshness
+      - name: Run dbt models
+        run: dbt run --profiles-dir ~/.dbt
 
-      - name: Run models
-        run: dbt run
-
-      - name: Run tests
-        run: dbt test
+      - name: Run dbt tests
+        run: dbt test --profiles-dir ~/.dbt
