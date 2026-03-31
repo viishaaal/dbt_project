@@ -238,7 +238,11 @@ git push -u origin main
 6. Project name shuols match in prject.yml and dbt-ci.yml
 7. git checkout -b dev
    git push origin dev
-8.   
+8. Made chnages to add prod dev logic in dbt-ci.yml then run
+git add .
+git commit -m "add PR validation"
+git push origin dev
+   
 
 
 
