@@ -8,6 +8,12 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    - cron: '0 13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   pr-check:
@@ -85,8 +91,8 @@ jobs:
       - name: Run dbt build
         run: dbt build --profiles-dir ~/.dbt
 
-  dbt-run:
-    if: github.event_name == 'push'
+  deploy-dev:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
 
     defaults:
@@ -125,15 +131,7 @@ jobs:
           done
           echo "All secrets present ✅"
 
-      - name: Set schema
-        run: |
-          if [[ "${GITHUB_REF}" == "refs/heads/main" ]]; then
-            echo "SCHEMA=PROD" >> $GITHUB_ENV
-          else
-            echo "SCHEMA=DEV" >> $GITHUB_ENV
-          fi
-
-      - name: Create profiles.yml
+      - name: Create profiles.yml for DEV
         env:
           SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
           SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
@@ -141,7 +139,6 @@ jobs:
           SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
           SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
           SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
-          SCHEMA: ${{ env.SCHEMA }}
         run: |
           mkdir -p ~/.dbt
           cat <<EOF > ~/.dbt/profiles.yml
@@ -156,7 +153,7 @@ jobs:
                 role: "$SNOWFLAKE_ROLE"
                 database: "$SNOWFLAKE_DATABASE"
                 warehouse: "$SNOWFLAKE_WAREHOUSE"
-                schema: "$SCHEMA"
+                schema: "DEV"
                 threads: 4
           EOF
 
@@ -166,8 +163,164 @@ jobs:
       - name: Run dbt deps
         run: dbt deps --profiles-dir ~/.dbt
 
-      - name: Run dbt models
+      - name: Run dbt run
         run: dbt run --profiles-dir ~/.dbt
 
-      - name: Run dbt tests
+      - name: Run dbt test
+        run: dbt test --profiles-dir ~/.dbt
+
+  deploy-prod:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: prod
+
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dbt
+        run: |
+          pip install --upgrade pip
+          pip install dbt-snowflake
+
+      - name: Validate secrets
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        run: |
+          for var in SNOWFLAKE_ACCOUNT SNOWFLAKE_USER SNOWFLAKE_PASSWORD SNOWFLAKE_ROLE SNOWFLAKE_DATABASE SNOWFLAKE_WAREHOUSE
+          do
+            if [ -z "${!var}" ]; then
+              echo "$var is EMPTY ❌"
+              exit 1
+            fi
+          done
+          echo "All secrets present ✅"
+
+      - name: Create profiles.yml for PROD
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        run: |
+          mkdir -p ~/.dbt
+          cat <<EOF > ~/.dbt/profiles.yml
+          dbt_project:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: "$SNOWFLAKE_ACCOUNT"
+                user: "$SNOWFLAKE_USER"
+                password: "$SNOWFLAKE_PASSWORD"
+                role: "$SNOWFLAKE_ROLE"
+                database: "$SNOWFLAKE_DATABASE"
+                warehouse: "$SNOWFLAKE_WAREHOUSE"
+                schema: "PROD"
+                threads: 4
+          EOF
+
+      - name: Run dbt debug
+        run: dbt debug --profiles-dir ~/.dbt
+
+      - name: Run dbt deps
+        run: dbt deps --profiles-dir ~/.dbt
+
+      - name: Run dbt run
+        run: dbt run --profiles-dir ~/.dbt
+
+      - name: Run dbt test
+        run: dbt test --profiles-dir ~/.dbt
+
+      - name: Generate dbt docs
+        run: dbt docs generate --profiles-dir ~/.dbt
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./target
+
+  publish-docs:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: deploy-prod
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+      contents: read
+    environment:
+      name: github-pages
+
+    steps:
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+
+  data-quality-alerts:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dbt
+        run: |
+          pip install --upgrade pip
+          pip install dbt-snowflake
+
+      - name: Create profiles.yml for PROD checks
+        env:
+          SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+          SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+          SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+          SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+          SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE }}
+          SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+        run: |
+          mkdir -p ~/.dbt
+          cat <<EOF > ~/.dbt/profiles.yml
+          dbt_project:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: "$SNOWFLAKE_ACCOUNT"
+                user: "$SNOWFLAKE_USER"
+                password: "$SNOWFLAKE_PASSWORD"
+                role: "$SNOWFLAKE_ROLE"
+                database: "$SNOWFLAKE_DATABASE"
+                warehouse: "$SNOWFLAKE_WAREHOUSE"
+                schema: "PROD"
+                threads: 4
+          EOF
+
+      - name: Run freshness checks
+        run: dbt source freshness --profiles-dir ~/.dbt
+
+      - name: Run production tests
         run: dbt test --profiles-dir ~/.dbt
